@@ -21,11 +21,11 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http, JwtDecoder jwtDecoder) throws Exception {
         http
                 .authorizeHttpRequests(auth -> auth
-                        /*.requestMatchers("/info").hasAuthority("svc::payment_gateway::route::/info")
                         .requestMatchers("/createPayment").hasAuthority("svc::payment_gateway:route:/createPayment")
-                                .requestMatchers("/executePayment").hasAuthority("svc::payment_gateway::route::/executePayment")*/
+                                .requestMatchers("/executePayment").hasAuthority("svc::payment_gateway::route::/executePayment")
+                        .requestMatchers("/paymentHistory").hasAuthority("svc::payment_gateway::route::/paymentHistory")
                         .requestMatchers("/docs","/v3/api-docs").permitAll()
-                        .requestMatchers("/**").permitAll()
+                        //.requestMatchers("/**").permitAll()
                 )
                 .csrf(AbstractHttpConfigurer::disable)
                 .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> {

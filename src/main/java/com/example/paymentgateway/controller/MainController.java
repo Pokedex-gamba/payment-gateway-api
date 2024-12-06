@@ -58,7 +58,7 @@ public class MainController {
                     @ApiResponse(responseCode = "400",
                             content = @Content(mediaType = "application/json",
                                     schema = @Schema(example = "{\"message\" : \"Amount must be greater than 0\"}"))),
-                    @ApiResponse(responseCode = "404")
+                    @ApiResponse(responseCode = "501")
             }
     )
     @GetMapping("/createPayment")
@@ -110,12 +110,12 @@ public class MainController {
             responses.put("approval_url", formatedResponse.getApprovalUrl() );
             return ResponseEntity.status(HttpStatus.CREATED).body(responses);
         }
-        return ResponseEntity.notFound().build();
+        return ResponseEntity.internalServerError().build();
     }
     @ApiResponses(
             value = {
                     @ApiResponse(responseCode = "200"),
-                    @ApiResponse(responseCode = "404")
+                    @ApiResponse(responseCode = "500")
             }
     )
     @GetMapping("/executePayment")
@@ -148,7 +148,7 @@ public class MainController {
             addMoney(userToken, (int)paymentHistory.getAmount());
             return ResponseEntity.status(HttpStatus.OK).build();
         }
-        return ResponseEntity.notFound().build();
+        return ResponseEntity.internalServerError().build();
     }
     @ApiResponses(
             value = {
