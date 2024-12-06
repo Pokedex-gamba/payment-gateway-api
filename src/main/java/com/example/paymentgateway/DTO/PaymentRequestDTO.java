@@ -2,25 +2,33 @@ package com.example.paymentgateway.DTO;
 
 public class PaymentRequestDTO {
 
-    private String amount;
-    private String currency;
+    private int amount;
     private String description;
+    private String succesUrl;
+    private String cancelUrl;
 
+    public String getSuccesUrl() {
+        return succesUrl;
+    }
 
-    public String getAmount() {
+    public void setSuccesUrl(String succesUrl) {
+        this.succesUrl = succesUrl;
+    }
+
+    public String getCancelUrl() {
+        return cancelUrl;
+    }
+
+    public void setCancelUrl(String cancelUrl) {
+        this.cancelUrl = cancelUrl;
+    }
+
+    public int getAmount() {
         return amount;
     }
 
-    public void setAmount(String amount) {
+    public void setAmount(int amount) {
         this.amount = amount;
-    }
-
-    public String getCurrency() {
-        return currency;
-    }
-
-    public void setCurrency(String currency) {
-        this.currency = currency;
     }
 
     public String getDescription() {

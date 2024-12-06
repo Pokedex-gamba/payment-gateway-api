@@ -1,10 +1,14 @@
 package com.example.paymentgateway.controller;
 
-
 import com.example.paymentgateway.DTO.PayPalCreateResponseDTO;
 import com.example.paymentgateway.DTO.PayPalExecuteRequestDTO;
 import com.example.paymentgateway.DTO.PaymentRequestDTO;
+import com.example.paymentgateway.entity.PaymentHistory;
 import com.example.paymentgateway.entity.Token;
+import com.example.paymentgateway.service.KeyLoaderService;
+import com.example.paymentgateway.service.PaymentGatewayService;
+import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.Jwts;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -14,15 +18,21 @@ import org.json.JSONObject;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
-import java.util.ArrayList;
-import java.util.Base64;
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileReader;
+import java.security.PublicKey;
+import java.util.*;
+import java.util.stream.Collectors;
 
 @RestController
 public class MainController {
@@ -35,56 +45,55 @@ public class MainController {
 
     private WebClient.Builder builder;
 
+    private KeyLoaderService keyLoaderService;
 
-    /*@ApiResponses(
+    private PaymentGatewayService paymentGatewayService;
+
+    @Value("${money.manager.api.url}")
+    private String moneyManagerApiUrl;
+
+    @ApiResponses(
             value = {
-                    @ApiResponse(responseCode = "200",
+                    @ApiResponse(responseCode = "201"),
+                    @ApiResponse(responseCode = "400",
                             content = @Content(mediaType = "application/json",
-                                    schema = @Schema(implementation = Token.class)))
-                    @ApiResponse(responseCode = "404",
-                            content = @Content(mediaType = "application/json",
-                                    schema = @Schema(example = "{\"message\" : \"No user wallet found\"}")))
+                                    schema = @Schema(example = "{\"message\" : \"Amount must be greater than 0\"}"))),
+                    @ApiResponse(responseCode = "404")
             }
-    )*/
-    @GetMapping(path = "/info")
-    public String getBalance() {
-        WebClient webClient = builder.baseUrl("https://api-m.sandbox.paypal.com/").build();
-        Token token = getAccessToken();
-        WebClient.ResponseSpec retrieve = webClient.get()
-                .uri("v1/identity/openidconnect/userinfo?schema=openid")
-                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token.getAccess_token())
-                .header(HttpHeaders.CONTENT_TYPE, "application/x-www-form-urlencoded")
-                .retrieve();
-        Mono<String> stringMono = retrieve.bodyToMono(String.class);
-        return stringMono.block();
-    }
-
+    )
     @GetMapping("/createPayment")
     public ResponseEntity<?> createPayment(@RequestBody PaymentRequestDTO paymentRequest) {
+        if (paymentRequest.getAmount() <= 0) {
+            Map<String, String> response = new HashMap<>();
+            response.put("message", "Amount must be greater than 0");
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).body(response);
+        }
         Token token = getAccessToken();
         WebClient webClient = builder.baseUrl("https://api-m.sandbox.paypal.com/v1").build();
 
         String requestBody = """
-        {
-          "intent": "sale",
-          "payer": {
-            "payment_method": "paypal"
-          },
-          "transactions": [
-            {
-              "amount": {
-                "total": "%s",
-                "currency": "%s"
-              },
-              "description": "%s"
-            }
-          ],
-          "redirect_urls": {
-            "return_url": "https://your-frontend-app.com/success",
-            "cancel_url": "https://your-frontend-app.com/cancel"
-          }
-        }
-        """.formatted(paymentRequest.getAmount(), paymentRequest.getCurrency(), paymentRequest.getDescription());
+                {
+                  "intent": "sale",
+                  "payer": {
+                    "payment_method": "paypal"
+                  },
+                  "transactions": [
+                    {
+                      "amount": {
+                        "total": "%s",
+                        "currency": "CZK"
+                      },
+                      "description": "Pokémon Gamba Payment: %s"
+                    }
+                  ],
+                  "redirect_urls": {
+                    "return_url": "%s",
+                    "cancel_url": "%s"
+                  }
+                }
+                """.formatted(paymentRequest.getAmount(), paymentRequest.getDescription().replace('"', '\''),
+                    paymentRequest.getSuccesUrl().replace("\"", "%22"),
+                    paymentRequest.getCancelUrl().replace("\"", "%22"));
 
         WebClient.ResponseSpec responseSpec = webClient.post()
                 .uri("/payments/payment")
@@ -95,16 +104,23 @@ public class MainController {
 
         String response = responseSpec.bodyToMono(String.class).block();
 
-        if(response != null) {
+        if (response != null) {
             PayPalCreateResponseDTO formatedResponse = formatedJson(response);
-            return ResponseEntity.ok(formatedResponse.getApprovalUrl());
+            Map<String, String> responses = new HashMap<>();
+            responses.put("approval_url", formatedResponse.getApprovalUrl() );
+            return ResponseEntity.status(HttpStatus.CREATED).body(responses);
         }
-        //return response;
         return ResponseEntity.notFound().build();
     }
-
-    @GetMapping("/execute")
-    public String executePayment(@RequestBody PayPalExecuteRequestDTO executeRequest) {
+    @ApiResponses(
+            value = {
+                    @ApiResponse(responseCode = "200"),
+                    @ApiResponse(responseCode = "404")
+            }
+    )
+    @GetMapping("/executePayment")
+    public ResponseEntity<?> executePayment(@RequestHeader(HttpHeaders.AUTHORIZATION) String userToken, @RequestBody PayPalExecuteRequestDTO executeRequest) {
+        String userId = getUserIdFromToken(userToken);
         Token token = getAccessToken();
 
         WebClient webClient = builder
@@ -112,10 +128,10 @@ public class MainController {
                 .build();
 
         String requestBody = """
-        {
-          "payer_id": "%s"
-        }
-        """.formatted(executeRequest.getPayerId());
+                {
+                  "payer_id": "%s"
+                }
+                """.formatted(executeRequest.getPayerId());
 
         WebClient.ResponseSpec responseSpec = webClient.post()
                 .uri("/payments/payment/" + executeRequest.getPaymentId() + "/execute")
@@ -126,7 +142,76 @@ public class MainController {
 
         String response = responseSpec.bodyToMono(String.class).block();
 
-        return response;
+        if(response != null) {
+            PaymentHistory paymentHistory = formatedHistory(response, userId);
+            paymentGatewayService.insertPaymentHistory(paymentHistory);
+            addMoney(userToken, (int)paymentHistory.getAmount());
+            return ResponseEntity.status(HttpStatus.OK).build();
+        }
+        return ResponseEntity.notFound().build();
+    }
+    @ApiResponses(
+            value = {
+                    @ApiResponse(responseCode = "200",
+                            content = @Content(mediaType = "application/json",
+                                    schema = @Schema(implementation = PaymentHistory.class))),
+                    @ApiResponse(responseCode = "404",
+                            content = @Content(mediaType = "application/json",
+                                    schema = @Schema(example = "{\"message\" : \"User not found\"}"))),
+            }
+    )
+    @GetMapping("/paymentHistory")
+    public ResponseEntity<?> PaymentHistory(@RequestHeader(HttpHeaders.AUTHORIZATION) String userToken) {
+        String userId = getUserIdFromToken(userToken);
+        Map<String, String> response = new HashMap<>();
+        List<PaymentHistory> paymentHistory = paymentGatewayService.findAllByUserId(userId);
+        if(paymentHistory == null){
+            response.put("message", "User not found");
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+        }
+
+        return ResponseEntity.ok(paymentHistory);
+    }
+
+    private String getUserIdFromToken(String authHeader) {
+        String token = authHeader.replace("Bearer", "").trim();
+
+        PublicKey publicKey;
+        try {
+            String path = MainController.class.getProtectionDomain().getCodeSource().getLocation().toURI().getPath();
+            File publicKeyFile = new File(path, "decoding_key");
+            if (!publicKeyFile.exists()) {
+                return "aaa";
+            }
+            BufferedReader reader = new BufferedReader(new FileReader(publicKeyFile));
+            String publicKeyContent = reader.lines().collect(Collectors.joining("\n"));
+            reader.close();
+            publicKey = keyLoaderService.getPublicKey(publicKeyContent);
+        } catch (Exception e) {
+            return "bbb";
+        }
+
+        Claims claims = Jwts.parser().verifyWith(publicKey).build().parseSignedClaims(token).getPayload();
+
+        String userId = claims.get("user_id", String.class);
+        if (userId == null) {
+            return "ccc";
+        }
+
+        return userId;
+    }
+
+    public WebClient.ResponseSpec addMoney(String authHeader, int balance) {
+        WebClient webClient = builder.baseUrl(moneyManagerApiUrl).build();
+        return webClient.get()
+                .uri("/modifyBalance/" + balance)
+                .header(HttpHeaders.AUTHORIZATION, authHeader)
+                .retrieve();
+    }
+
+    @Autowired
+    public void setKeyLoaderService(KeyLoaderService keyLoaderService) {
+        this.keyLoaderService = keyLoaderService;
     }
 
     private Token getAccessToken() {
@@ -181,8 +266,33 @@ public class MainController {
         return responseObject;
     }
 
+    private PaymentHistory formatedHistory(String json, String userId) {
+        JSONObject jsonObject = new JSONObject(json);
+        String id = jsonObject.getString("id");
+        String state = jsonObject.getString("state");
+        JSONArray transactions = jsonObject.getJSONArray("transactions");
+        JSONObject transaction = transactions.getJSONObject(0);
+        JSONObject amount = transaction.getJSONObject("amount");
+        String total = amount.getString("total");
+        String currency = amount.getString("currency");
+
+        PaymentHistory paymentHistory = new PaymentHistory();
+        paymentHistory.setPaymentId(id);
+        paymentHistory.setUserId(userId);
+        paymentHistory.setAmount(Float.parseFloat(total));
+        paymentHistory.setCurrency(currency);
+        paymentHistory.setStatus(state);
+
+        return paymentHistory;
+    }
+
     @Autowired
     public void setBuilder(WebClient.Builder builder) {
         this.builder = builder;
+    }
+
+    @Autowired
+    public void setPaymentGatewayService(PaymentGatewayService paymentGatewayService) {
+        this.paymentGatewayService = paymentGatewayService;
     }
 }

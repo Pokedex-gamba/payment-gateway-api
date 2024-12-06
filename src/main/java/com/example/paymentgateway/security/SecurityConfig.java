@@ -21,9 +21,11 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http, JwtDecoder jwtDecoder) throws Exception {
         http
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/info").hasAuthority("svc::payment_gateway::route::/info")
-                        //.requestMatchers("/findUserInfo").hasAuthority("svc::user_info::route::/findUserInfo")
+                        /*.requestMatchers("/info").hasAuthority("svc::payment_gateway::route::/info")
+                        .requestMatchers("/createPayment").hasAuthority("svc::payment_gateway:route:/createPayment")
+                                .requestMatchers("/executePayment").hasAuthority("svc::payment_gateway::route::/executePayment")*/
                         .requestMatchers("/docs","/v3/api-docs").permitAll()
+                        .requestMatchers("/**").permitAll()
                 )
                 .csrf(AbstractHttpConfigurer::disable)
                 .oauth2ResourceServer(oauth2 -> oauth2.jwt(jwt -> {
@@ -42,7 +44,6 @@ public class SecurityConfig {
             if (roles == null) {
                 return List.of();
             }
-
             return roles.stream()
                     .map(SimpleGrantedAuthority::new)
                     .collect(Collectors.toList());
