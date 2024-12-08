@@ -92,7 +92,7 @@ public class MainController {
                   }
                 }
                 """.formatted(paymentRequest.getAmount(), paymentRequest.getDescription().replace('"', '\''),
-                    paymentRequest.getSuccesUrl().replace("\"", "%22"),
+                    paymentRequest.getSuccessUrl().replace("\"", "%22"),
                     paymentRequest.getCancelUrl().replace("\"", "%22"));
 
         WebClient.ResponseSpec responseSpec = webClient.post()
@@ -105,7 +105,7 @@ public class MainController {
         String response = responseSpec.bodyToMono(String.class).block();
 
         if (response != null) {
-            PayPalCreateResponseDTO formatedResponse = formatedJson(response);
+            PayPalCreateResponseDTO formatedResponse = formattedJson(response);
             Map<String, String> responses = new HashMap<>();
             responses.put("approval_url", formatedResponse.getApprovalUrl() );
             return ResponseEntity.status(HttpStatus.CREATED).body(responses);
@@ -143,9 +143,9 @@ public class MainController {
         String response = responseSpec.bodyToMono(String.class).block();
 
         if(response != null) {
-            PaymentHistory paymentHistory = formatedHistory(response, userId);
+            PaymentHistory paymentHistory = formattedHistory(response, userId);
             paymentGatewayService.insertPaymentHistory(paymentHistory);
-            addMoney(userToken, (int)paymentHistory.getAmount());
+            addMoney(userToken, (int)paymentHistory.getAmount()).bodyToMono(String.class).block();
             return ResponseEntity.status(HttpStatus.OK).build();
         }
         return ResponseEntity.internalServerError().build();
@@ -233,7 +233,7 @@ public class MainController {
         return responseMono.block();
     }
 
-    private PayPalCreateResponseDTO formatedJson(String json) {
+    private PayPalCreateResponseDTO formattedJson(String json) {
         JSONObject jsonResponse = new JSONObject(json);
 
         String paymentId = jsonResponse.getString("id");
@@ -266,7 +266,7 @@ public class MainController {
         return responseObject;
     }
 
-    private PaymentHistory formatedHistory(String json, String userId) {
+    private PaymentHistory formattedHistory(String json, String userId) {
         JSONObject jsonObject = new JSONObject(json);
         String id = jsonObject.getString("id");
         String state = jsonObject.getString("state");

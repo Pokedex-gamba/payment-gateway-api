@@ -4,15 +4,15 @@ public class PaymentRequestDTO {
 
     private int amount;
     private String description;
-    private String succesUrl;
+    private String successUrl;
     private String cancelUrl;
 
-    public String getSuccesUrl() {
-        return succesUrl;
+    public String getSuccessUrl() {
+        return successUrl;
     }
 
-    public void setSuccesUrl(String succesUrl) {
-        this.succesUrl = succesUrl;
+    public void setSuccessUrl(String successUrl) {
+        this.successUrl = successUrl;
     }
 
     public String getCancelUrl() {
