@@ -9,6 +9,7 @@ import com.example.paymentgateway.service.KeyLoaderService;
 import com.example.paymentgateway.service.PaymentGatewayService;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -20,10 +21,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestHeader;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 import org.springframework.web.reactive.function.client.WebClient;
 import reactor.core.publisher.Mono;
 
@@ -54,14 +52,16 @@ public class MainController {
 
     @ApiResponses(
             value = {
-                    @ApiResponse(responseCode = "201"),
+                    @ApiResponse(responseCode = "201",
+                            content = @Content(mediaType = "application/json",
+                            schema = @Schema(example = "{\"approval_url\" : \"https://www.sandbox.paypal.com/cgi-bin/webscr?cmd=_express-checkout&token=EC-XXXXXXXX\"}"))),
                     @ApiResponse(responseCode = "400",
                             content = @Content(mediaType = "application/json",
                                     schema = @Schema(example = "{\"message\" : \"Amount must be greater than 0\"}"))),
                     @ApiResponse(responseCode = "501")
             }
     )
-    @GetMapping("/createPayment")
+    @PostMapping("/createPayment")
     public ResponseEntity<?> createPayment(@RequestBody PaymentRequestDTO paymentRequest) {
         if (paymentRequest.getAmount() <= 0) {
             Map<String, String> response = new HashMap<>();
@@ -118,7 +118,7 @@ public class MainController {
                     @ApiResponse(responseCode = "500")
             }
     )
-    @GetMapping("/executePayment")
+    @PostMapping("/executePayment")
     public ResponseEntity<?> executePayment(@RequestHeader(HttpHeaders.AUTHORIZATION) String userToken, @RequestBody PayPalExecuteRequestDTO executeRequest) {
         String userId = getUserIdFromToken(userToken);
         Token token = getAccessToken();
@@ -154,7 +154,7 @@ public class MainController {
             value = {
                     @ApiResponse(responseCode = "200",
                             content = @Content(mediaType = "application/json",
-                                    schema = @Schema(implementation = PaymentHistory.class))),
+                                    array = @ArraySchema(schema = @Schema(implementation = PaymentHistory.class)))),
                     @ApiResponse(responseCode = "404",
                             content = @Content(mediaType = "application/json",
                                     schema = @Schema(example = "{\"message\" : \"User not found\"}"))),
