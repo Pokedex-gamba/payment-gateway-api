@@ -1,3 +1,5 @@
+drop database if exists payment_history;
+
 create database payment_history;
 
 use payment_history;
