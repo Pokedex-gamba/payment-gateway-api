@@ -4,11 +4,12 @@ services:
   payment-gateway-api:
     image: ghcr.io/pokedex-gamba/payment-gateway-api:latest
     ports:
-      - "8893:80"
+      - "8894:80"
     environment:
       - SPRING_DATASOURCE_URL=jdbc:mysql://db:3306/payment_history
       - SPRING_DATASOURCE_USERNAME=root
       - SPRING_DATASOURCE_PASSWORD=password
+      - MONEY_MANAGER_API_URL=http://host.docker.internal:8893
     depends_on:
       - db
     volumes:
