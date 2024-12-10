@@ -133,20 +133,24 @@ public class MainController {
                 }
                 """.formatted(executeRequest.getPayerId());
 
-        WebClient.ResponseSpec responseSpec = webClient.post()
-                .uri("/payments/payment/" + executeRequest.getPaymentId() + "/execute")
-                .header(HttpHeaders.AUTHORIZATION, "Bearer " + token.getAccess_token())
-                .header(HttpHeaders.CONTENT_TYPE, "application/json")
-                .bodyValue(requestBody)
-                .retrieve();
+        if(paymentGatewayService.findOneByPaymentId(executeRequest).isEmpty()){
+            WebClient.ResponseSpec responseSpec = webClient.post()
+                    .uri("/payments/payment/" + executeRequest.getPaymentId() + "/execute")
+                    .header(HttpHeaders.AUTHORIZATION, "Bearer " + token.getAccess_token())
+                    .header(HttpHeaders.CONTENT_TYPE, "application/json")
+                    .bodyValue(requestBody)
+                    .retrieve();
 
-        String response = responseSpec.bodyToMono(String.class).block();
+            String response = responseSpec.bodyToMono(String.class).block();
 
-        if(response != null) {
-            PaymentHistory paymentHistory = formattedHistory(response, userId);
-            paymentGatewayService.insertPaymentHistory(paymentHistory);
-            addMoney(userToken, (int)paymentHistory.getAmount()).bodyToMono(String.class).block();
-            return ResponseEntity.status(HttpStatus.OK).build();
+            if(response != null) {
+                PaymentHistory paymentHistory = formattedHistory(response, userId);
+                    paymentGatewayService.insertPaymentHistory(paymentHistory);
+                    addMoney(userToken, (int)paymentHistory.getAmount()).bodyToMono(String.class).block();
+                    return ResponseEntity.status(HttpStatus.OK).build();
+            }
+        } else {
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST).build();
         }
         return ResponseEntity.internalServerError().build();
     }
